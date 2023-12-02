@@ -2,11 +2,9 @@ package com.esark.framework;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.ActivityManager;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -37,7 +35,6 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 
-import com.esark.roboticarm.GameScreen;
 import com.esark.roboticarm.R;
 import com.esark.roboticarm.RoboticArm;
 import com.esark.roboticarm.ConnectedThread;
@@ -45,9 +42,12 @@ import com.esark.roboticarm.ConnectedThread;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.UUID;
+
+import static com.esark.roboticarm.GameScreen.go;
 
 public abstract class AndroidGame extends Activity implements Game {
     Bundle newBundy = new Bundle();
@@ -68,6 +68,7 @@ public abstract class AndroidGame extends Activity implements Game {
 
     // GUI Components
     private TextView mBluetoothStatus;
+
     private Button mScanBtn;
     private Button mOffBtn;
     private Button mListPairedDevicesBtn;
@@ -83,8 +84,8 @@ public abstract class AndroidGame extends Activity implements Game {
     private Handler mHandler; // Our main handler that will receive callback notifications
     private ConnectedThread mConnectedThread; // bluetooth background worker thread to send and receive data
     private BluetoothSocket mBTSocket = null; // bi-directional client-to-client data path
-    Button enablebt,disablebt,scanbt, mShowGraphBtn;
-    private Set<BluetoothDevice>pairedDevices;
+    Button enablebt, disablebt, scanbt, mShowGraphBtn;
+    private Set<BluetoothDevice> pairedDevices;
     ListView lv;
     private AlertDialog dialog;
 
@@ -124,14 +125,18 @@ public abstract class AndroidGame extends Activity implements Game {
     public static int[] alphaFB = new int[10];
     public static int[] beta = new int[10];
     public static int[] betaFB = new int[10];
- //   public static int[] xDistance = new int[10];
+    //   public static int[] xDistance = new int[10];
     public static int xDistance = 0;
+    public static int kReceived = 0;
+    public static int connectionExc = 0;
+    int connectedFlag = 0;
 
-   // private LruCache<String, Bitmap> mMemoryCache;
+    // private LruCache<String, Bitmap> mMemoryCache;
     //public int count = 0;
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
 
                 /*
 
@@ -141,7 +146,7 @@ public abstract class AndroidGame extends Activity implements Game {
          */
 
         setContentView(R.layout.activity_main);
-
+        mBluetoothStatus = (TextView) findViewById(R.id.bluetooth_status);
         // Get the pixel dimensions of the screen
         Display display = getWindowManager().getDefaultDisplay();
         // Initialize the result into a Point object
@@ -150,40 +155,50 @@ public abstract class AndroidGame extends Activity implements Game {
         display.getSize(size);
         width = size.x;
         height = size.y;
-        mBluetoothStatus = (TextView)findViewById(R.id.bluetooth_status);
+        mBluetoothStatus = (TextView) findViewById(R.id.bluetooth_status);
         //New Client Oncreate Bluetooth Code
-        enablebt=(Button)findViewById(R.id.button_enablebt);
-        disablebt=(Button)findViewById(R.id.button_disablebt);
-        scanbt=(Button)findViewById(R.id.button_scanbt);
-        mShowGraphBtn = (Button)findViewById((R.id.display_btn));
+        enablebt = (Button) findViewById(R.id.button_enablebt);
+        disablebt = (Button) findViewById(R.id.button_disablebt);
+        scanbt = (Button) findViewById(R.id.button_scanbt);
+        mShowGraphBtn = (Button) findViewById((R.id.display_btn));
         BTAdapter = BluetoothAdapter.getDefaultAdapter();
-        lv = (ListView)findViewById(R.id.listView);
-        if (BTAdapter.isEnabled()){
+        lv = (ListView) findViewById(R.id.listView);
+        if (BTAdapter.isEnabled()) {
             scanbt.setVisibility(View.VISIBLE);
         }
 
         // Ask for location permission if not already allowed
-        if(ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED)
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 1);
 
         //Message from run() in ConnectedThread mHandler.obtain message
-        mHandler = new Handler(Looper.getMainLooper()){
+        mHandler = new Handler(Looper.getMainLooper()) {
             @Override
-            public void handleMessage(Message msg){
-                if(msg.what == MESSAGE_READ){
+            public void handleMessage(Message msg) {
+                if (msg.what == MESSAGE_READ) {
                     String readMessage = null;
                     try {
                         readMessage = new String((byte[]) msg.obj, "UTF-8");
                         System.out.println(readMessage);
                         breakFlag = 0;
+                        for (int t = 0; t < loopCount; t++) {
+                            if (readMessage.charAt(t) == 'K') {     //'K' for clear. We want to shut off the go flag
+                                go = 0;
+                            }
+                        }
 
-                        for(int t = 0; t < loopCount; t++) {
+                        ////////////////////////////////////////////////////////////////////////////
+                        /////I think I figured out the A/D delay. Too many loops.///////////////////
+                        /////Make one for (int t = 0; t < loopCount; t++) { to detect all of the values
+                        //////////////////////////////////////////////////////////////////////////////
+
+                        for (int t = 0; t < loopCount; t++) {
                             breakFlag = 0;
                             if (readMessage.charAt(t) == 'b') {         //Next char is a number
                                 for (n = 1; n < 5; n++) {
                                     //Log.d("ADebugTag", "readMessage: " + (int)(readMessage.charAt(t + n)));
-                                    if ((int) (readMessage.charAt(t + n)) < 48 || (int) (readMessage.charAt(t + n)) > 57) {
-                                        breakFlag = 1;
+                                    if ((int) (readMessage.charAt(t + n)) < 48 || (int) (readMessage.charAt(t + n)) > 57) {     //48 - 57 are the ascii codes of 0 - 9
+                                        breakFlag = 1;      //Not a number, break
                                     }
                                 }
                                 if (breakFlag != 1) {
@@ -196,7 +211,7 @@ public abstract class AndroidGame extends Activity implements Game {
                                     t++;
                                     number1 = Character.getNumericValue(readMessage.charAt((t)));
                                     //if ((number1000 + number100 + number10 + number1) >= 0 && (number1000 + number100 + number10 + number1) <= 360) {
-                                        //stickBuffer += (number1000 + number100 + number10 + number1);
+                                    //stickBuffer += (number1000 + number100 + number10 + number1);
                                     boomADC[q] = (number1000 + number100 + number10 + number1);
                                     //}
                                     q++;
@@ -207,7 +222,7 @@ public abstract class AndroidGame extends Activity implements Game {
                             }
                         }
 
-                        for(int t = 0; t < loopCount; t++) {
+                        for (int t = 0; t < loopCount; t++) {
                             breakFlag = 0;
                             if (readMessage.charAt(t) == 's') {         //Next char is a number
                                 for (n = 1; n < 5; n++) {
@@ -225,10 +240,10 @@ public abstract class AndroidGame extends Activity implements Game {
                                     number10 = (Character.getNumericValue(readMessage.charAt((t)))) * 10;
                                     t++;
                                     number1 = Character.getNumericValue(readMessage.charAt((t)));
-                                   // if ((number1000 + number100 + number10 + number1) >= 0 && (number1000 + number100 + number10 + number1) <= 360) {
-                                        //stickBuffer += (number1000 + number100 + number10 + number1);
+                                    // if ((number1000 + number100 + number10 + number1) >= 0 && (number1000 + number100 + number10 + number1) <= 360) {
+                                    //stickBuffer += (number1000 + number100 + number10 + number1);
                                     stickADC[j] = (number1000 + number100 + number10 + number1);
-                                  //  }
+                                    //  }
                                     j++;
                                     if (j >= bufferSize)
                                         j = 0;
@@ -237,7 +252,7 @@ public abstract class AndroidGame extends Activity implements Game {
                             }
                         }
 
-                        for(int t = 0; t < loopCount; t++) {
+                        for (int t = 0; t < loopCount; t++) {
                             breakFlag = 0;
                             if (readMessage.charAt(t) == 't') {         //Next char is a number
                                 for (n = 1; n < 5; n++) {
@@ -266,7 +281,7 @@ public abstract class AndroidGame extends Activity implements Game {
                                 }
                             }
                         }
-                        for(int t = 0; t < loopCount; t++) {
+                        for (int t = 0; t < loopCount; t++) {
                             breakFlag = 0;
                             if (readMessage.charAt(t) == 'c') {         //Next char is a number
                                 for (n = 1; n < 5; n++) {
@@ -301,8 +316,9 @@ public abstract class AndroidGame extends Activity implements Game {
                     }
                 }
 
-                if(msg.what == CONNECTING_STATUS){
-                    if(msg.arg1 == 1)
+
+                if (msg.what == CONNECTING_STATUS) {
+                    if (msg.arg1 == 1)
                         mBluetoothStatus.setText("Connected to Device: " + msg.obj);
                     else
                         mBluetoothStatus.setText("Connection Failed");
@@ -313,25 +329,26 @@ public abstract class AndroidGame extends Activity implements Game {
         if (mBTArrayAdapter == null) {
             // Device does not support Bluetooth
             mBluetoothStatus.setText("Status: Bluetooth not found");
-            Toast.makeText(getApplicationContext(),"Bluetooth device not found!",Toast.LENGTH_SHORT).show();
+            Toast.makeText(getApplicationContext(), "Bluetooth device not found!", Toast.LENGTH_SHORT).show();
         }
 
         mShowGraphBtn.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) { showGraph(); }
+            public void onClick(View v) {
+                showGraph();
+            }
         });
 
 
         boolean isLandscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
-        if(isLandscape == true)
+        if (isLandscape == true)
             landscape = 1;
-        else if(isLandscape == false)
+        else if (isLandscape == false)
             landscape = 0;
         int frameBufferWidth = isLandscape ? 5000 : 3500;
         int frameBufferHeight = isLandscape ? 3500 : 5000;
         Bitmap frameBuffer = Bitmap.createBitmap(frameBufferWidth,
                 frameBufferHeight, Config.RGB_565);
-
 
 
         DisplayMetrics displaymetrics = new DisplayMetrics();
@@ -351,12 +368,11 @@ public abstract class AndroidGame extends Activity implements Game {
 
     }
 
-
-    public void on(View v){
+    public void on(View v) {
         if (!BTAdapter.isEnabled()) {
             Intent turnOn = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             startActivityForResult(turnOn, 0);
-            Toast.makeText(getApplicationContext(), "Turned on",Toast.LENGTH_SHORT).show();
+            Toast.makeText(getApplicationContext(), "Turned on", Toast.LENGTH_SHORT).show();
         } else {
             Toast.makeText(getApplicationContext(), "Already on", Toast.LENGTH_SHORT).show();
         }
@@ -364,34 +380,35 @@ public abstract class AndroidGame extends Activity implements Game {
         lv.setVisibility(View.VISIBLE);
     }
 
-    public void off(View v){
+    public void off(View v) {
         BTAdapter.disable();
-        Toast.makeText(getApplicationContext(), "Turned off" ,Toast.LENGTH_SHORT).show();
+        Toast.makeText(getApplicationContext(), "Turned off", Toast.LENGTH_SHORT).show();
         scanbt.setVisibility(View.INVISIBLE);
         lv.setVisibility(View.GONE);
     }
 
-    public void deviceList(View v){
+    public void deviceList(View v) {
         ArrayList deviceList = new ArrayList();
         pairedDevices = BTAdapter.getBondedDevices();
 
         if (pairedDevices.size() < 1) {
             Toast.makeText(getApplicationContext(), "No paired devices found", Toast.LENGTH_SHORT).show();
         } else {
-            for (BluetoothDevice bt : pairedDevices) deviceList.add(bt.getName() + " " + bt.getAddress());
+            for (BluetoothDevice bt : pairedDevices)
+                deviceList.add(bt.getName() + " " + bt.getAddress());
             Toast.makeText(getApplicationContext(), "Showing paired devices", Toast.LENGTH_SHORT).show();
             final ArrayAdapter adapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1, deviceList);
             lv.setAdapter(adapter);
             lv.setOnItemClickListener(myListClickListener);
         }
     }
-    private AdapterView.OnItemClickListener myListClickListener = new AdapterView.OnItemClickListener() {
 
+    private AdapterView.OnItemClickListener myListClickListener = new AdapterView.OnItemClickListener() {
         @Override
         public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
             String info = ((TextView) view).getText().toString();
             String address = info.substring(info.length() - 17);
-            final String name = info.substring(0,info.length() - 17);
+            final String name = info.substring(0, info.length() - 17);
             new Thread() {
                 @Override
                 public void run() {
@@ -407,26 +424,26 @@ public abstract class AndroidGame extends Activity implements Game {
                     }
                     mmSocket = tmp;
                     BTAdapter.cancelDiscovery();
-                    try {
-                        mmSocket.connect();
-
-                    } catch (IOException connectException) {
-                        Log.v(TAG, "Connection exception!");
+                    while(!mmSocket.isConnected()) {
                         try {
-                            mmSocket.close();
-                            mHandler.obtainMessage(CONNECTING_STATUS, -1, -1)
-                                    .sendToTarget();
-                            /*mmSocket = (BluetoothSocket) mmDevice.getClass().getMethod("createRfcommSocket", new Class[]{int.class}).invoke(mmDevice, 1);
                             mmSocket.connect();
-                        } catch (NoSuchMethodException e) {
-                            e.printStackTrace();
-                        } catch (IllegalAccessException e) {
-                            e.printStackTrace();
-                        } catch (InvocationTargetException e) {
-                            e.printStackTrace();
-                        } */
-                        } catch (IOException closeException) {
-
+                        } catch (IOException connectException) {
+                            Log.d(TAG, "Connection exception!");
+                            try {
+                                mmSocket.close();
+                                mHandler.obtainMessage(CONNECTING_STATUS, -1, -1)
+                                        .sendToTarget();
+                                mmSocket = (BluetoothSocket) mmDevice.getClass().getMethod("createRfcommSocket", new Class[]{int.class}).invoke(mmDevice, 1);
+                                mmSocket.connect();
+                            } catch (IOException closeException) {
+                                closeException.printStackTrace();
+                            } catch (NoSuchMethodException e) {
+                                e.printStackTrace();
+                            } catch (IllegalAccessException e) {
+                                e.printStackTrace();
+                            } catch (InvocationTargetException e) {
+                                e.printStackTrace();
+                            }
                         }
                     }
                     mHandler.obtainMessage(CONNECTING_STATUS, 1, -1, name)
@@ -527,7 +544,7 @@ public abstract class AndroidGame extends Activity implements Game {
         super.onPause();
         renderView.pause();
         screen.pause();
-   //     System.gc();
+        //     System.gc();
         //screen.dispose();
         if (isFinishing())
             screen.dispose();
