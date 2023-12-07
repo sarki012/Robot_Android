@@ -12,6 +12,7 @@ import static com.esark.roboticarm.GameScreen.left;
 import static com.esark.roboticarm.GameScreen.out;
 import static com.esark.roboticarm.GameScreen.record;
 import static com.esark.roboticarm.GameScreen.repeat;
+import static com.esark.roboticarm.GameScreen.returnHome;
 import static com.esark.roboticarm.GameScreen.right;
 import static com.esark.roboticarm.GameScreen.tipDown;
 import static com.esark.roboticarm.GameScreen.tipUp;
@@ -42,6 +43,7 @@ public class ConnectedThread extends Thread {
 
     public static int arrayFilled = 0;
     public static int count = 0;
+    public static int returnCount = 0;
 
     public ConnectedThread(BluetoothSocket socket, Handler handler) {
         mmSocket = socket;
@@ -163,6 +165,14 @@ public class ConnectedThread extends Thread {
             }
             else if(toggleFlag == 0){       //RC mode
                 write("R");
+            }
+
+            if(returnHome == 1){       //Return home
+                for(int i = 0; i < 100; i++) {
+                    write("H");
+                    SystemClock.sleep(10);
+                }
+                returnHome = 0;
             }
         }
     }

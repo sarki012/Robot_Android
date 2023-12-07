@@ -181,12 +181,13 @@ public abstract class AndroidGame extends Activity implements Game {
                         readMessage = new String((byte[]) msg.obj, "UTF-8");
                         System.out.println(readMessage);
                         breakFlag = 0;
+                        /*
                         for (int t = 0; t < loopCount; t++) {
                             if (readMessage.charAt(t) == 'K') {     //'K' for clear. We want to shut off the go flag
                                 go = 0;
                             }
                         }
-
+*/
                         ////////////////////////////////////////////////////////////////////////////
                         /////I think I figured out the A/D delay. Too many loops.///////////////////
                         /////Make one for (int t = 0; t < loopCount; t++) { to detect all of the values
@@ -424,28 +425,27 @@ public abstract class AndroidGame extends Activity implements Game {
                     }
                     mmSocket = tmp;
                     BTAdapter.cancelDiscovery();
-                    while(!mmSocket.isConnected()) {
+                    try {
+                        mmSocket.connect();
+                    } catch (IOException connectException) {
+                        Log.d(TAG, "Connection exception!");
                         try {
+                            mmSocket.close();
+                            mHandler.obtainMessage(CONNECTING_STATUS, -1, -1)
+                                    .sendToTarget();
+                            mmSocket = (BluetoothSocket) mmDevice.getClass().getMethod("createRfcommSocket", new Class[]{int.class}).invoke(mmDevice, 1);
                             mmSocket.connect();
-                        } catch (IOException connectException) {
-                            Log.d(TAG, "Connection exception!");
-                            try {
-                                mmSocket.close();
-                                mHandler.obtainMessage(CONNECTING_STATUS, -1, -1)
-                                        .sendToTarget();
-                                mmSocket = (BluetoothSocket) mmDevice.getClass().getMethod("createRfcommSocket", new Class[]{int.class}).invoke(mmDevice, 1);
-                                mmSocket.connect();
-                            } catch (IOException closeException) {
-                                closeException.printStackTrace();
-                            } catch (NoSuchMethodException e) {
-                                e.printStackTrace();
-                            } catch (IllegalAccessException e) {
-                                e.printStackTrace();
-                            } catch (InvocationTargetException e) {
-                                e.printStackTrace();
-                            }
+                        } catch (IOException closeException) {
+                            closeException.printStackTrace();
+                        } catch (NoSuchMethodException e) {
+                            e.printStackTrace();
+                        } catch (IllegalAccessException e) {
+                            e.printStackTrace();
+                        } catch (InvocationTargetException e) {
+                            e.printStackTrace();
                         }
                     }
+
                     mHandler.obtainMessage(CONNECTING_STATUS, 1, -1, name)
                             .sendToTarget();
                     mConnectedThread = new ConnectedThread(mmSocket, mHandler);
