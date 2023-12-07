@@ -17,6 +17,7 @@ import static com.esark.roboticarm.Assets.robotPortraitBackground;
 import static com.esark.roboticarm.Assets.whiteSphere;
 import static com.esark.roboticarm.ConnectedThread.arrayFilled;
 import static com.esark.roboticarm.ConnectedThread.count;
+import static com.esark.roboticarm.ConnectedThread.returnCount;
 
 import java.util.List;
 
@@ -38,6 +39,7 @@ public class GameScreen extends Screen implements Input {
     public static int repeat = 0;
     public static int go = 0;
     public static int stop = 0;
+    public static int returnHome = 0;
 
     public int count2 = 0;
     public static int toggleFlag = 0;
@@ -214,7 +216,7 @@ public class GameScreen extends Screen implements Input {
         //g.drawTestRect(900, 1000);
        // g.drawTestRect(1200, 2000);
         //g.drawTestRect(2100, 2000);
-
+       // g.drawTestRect(860, 220);       //Return to base
 
         //g.drawTestRect(1100, 1850);
         int len = touchEvents.size();
@@ -283,6 +285,10 @@ public class GameScreen extends Screen implements Input {
                     Intent intent2 = new Intent(context.getApplicationContext(), RoboticArm.class);
                     context.startActivity(intent2);
                     return;
+                }
+                if(x > 860 && x < 1360 && y > 220 && y < 720){       //Return to base
+                    returnHome = 1;
+                    returnCount = 0;
                 }
                 if(x > 300 && x < 800 && y > 1000 && y < 1500){     //Remote Control
                     if(toggleFlag == 1){
